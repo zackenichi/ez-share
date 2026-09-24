@@ -1,12 +1,23 @@
-# Next.js Firebase App Template
+# Ez-Share
 
-A reusable Next.js 16 starter with Firebase, Tailwind CSS, and shadcn/ui.
+Ez-Share is a collaborative encrypted Vault for teams. Workspaces can organize passwords and secure notes into folders, control access per member, and create encrypted one-time public shares.
 
-The template includes email/password and Google authentication, persistent server sessions, protected dashboard routes, root-admin provisioning, logout, and account deletion.
+## Features
 
-It also includes a workspace switcher. Every account receives a private **My workspace**, and the selected workspace is persisted on the server so all server-rendered dashboard data can use the same authorization boundary.
+- Shared workspace Vaults for passwords and secure notes
+- Client-side AES-256-GCM encryption before Vault content is uploaded
+- Encrypted folders with per-member View, Edit, Share, and Manage access permissions
+- One-time encrypted share links that expire after 24 hours and can be revealed only once
+- Workspace invitations, membership management, and access-change notifications
+- Personal **My workspace**, multiple workspaces, and a configurable default workspace
+- Grid and list layouts, search, folders, and filtered Passwords and Notes views
+- Email/password and Google authentication with secure server sessions
+- Separate application administration and workspace ownership
+- Server-side authorization, same-origin protection, and deny-all client Firestore rules
 
-## 1. Install the template
+The database stores encrypted Vault payloads rather than password or note plaintext. See [Encryption and key management](docs/encryption.md) for the design, guarantees, limitations, backup requirements, and rotation plan.
+
+## 1. Install Ez-Share
 
 ```bash
 npm install
@@ -15,7 +26,21 @@ cp env.example .env.local
 
 Keep `.env.local` open while completing the Firebase steps below.
 
-## 2. Create the Firebase project and Web app
+## 2. Generate the Vault master key
+
+Generate a random 32-byte key and write it directly to `.env.local`:
+
+```bash
+npm run vault:generate-key
+```
+
+The script refuses to overwrite an existing key and does not print the secret to the terminal. Back up the generated value in a password manager or managed secrets service before storing Vault data. Losing it makes protected workspace keys—and therefore Vault content—unrecoverable.
+
+Never prefix it with `NEXT_PUBLIC_`, commit it, log it, email it, or place it in Firebase. Use one stable value across every instance of the same environment, and use different values and databases for development, preview, and production.
+
+> Existing-data warning: do not generate a replacement key for a database that already contains Vault data. Use the migration procedure in [Encryption and key management](docs/encryption.md).
+
+## 3. Create the Firebase project and Web app
 
 1. Open the [Firebase Console](https://console.firebase.google.com/).
 2. Create or select a project.
@@ -34,7 +59,7 @@ Keep `.env.local` open while completing the Firebase steps below.
 
 You can find these values again under **Project settings → General → Your apps**.
 
-## 3. Create the service-account key
+## 4. Create the service-account key
 
 Stay in **Project settings**, then:
 
@@ -59,7 +84,7 @@ Stay in **Project settings**, then:
 
 Never commit the downloaded JSON or `.env.local`, expose Admin values through `NEXT_PUBLIC_` variables, or place credentials under `public/`. Store production credentials in your deployment platform's encrypted environment settings.
 
-## 4. Set up Firebase Authentication
+## 5. Set up Firebase Authentication
 
 Open **Build → Authentication**:
 
@@ -81,9 +106,9 @@ Set the initial root administrator in `.env.local`:
 ROOT_EMAIL="owner@example.com"
 ```
 
-`ROOT_EMAIL` is server-only. When authentication is implemented, the server will compare it with the verified Firebase email while creating a user's Firestore profile for the first time. A match receives the `admin` role; every other account receives the `user` role. Role values sent by the browser will never be trusted. Use an email/password or Google account whose verified email exactly matches this value, ignoring capitalization and surrounding spaces.
+`ROOT_EMAIL` is server-only. The server compares it with the verified Firebase email while creating a user's Firestore profile for the first time. A match receives the `admin` role; every other account receives the `user` role. Role values sent by the browser are never trusted. Use an email/password or Google account whose verified email exactly matches this value, ignoring capitalization and surrounding spaces.
 
-## 5. Create Cloud Firestore
+## 6. Create Cloud Firestore
 
 Open **Build → Firestore Database**:
 
@@ -107,7 +132,7 @@ Open **Build → Firestore Database**:
 
 Add collection-specific rules as the data model is built. The Admin SDK bypasses Firestore Security Rules, so server operations must perform their own authorization checks.
 
-## 6. Customize the app
+## 7. Customize the app
 
 Set the application values in `.env.local`:
 
@@ -129,7 +154,7 @@ The replacement must be a real ICO file, not a PNG renamed with an `.ico` extens
 
 The file at `public/favicon.ico` is not the active favicon while `src/app/favicon.ico` exists. Use `src/app/favicon.ico` as the single source of truth. After replacing it, restart the development server and hard-refresh the page or clear the browser favicon cache if the previous icon remains visible.
 
-## 7. Run the app
+## 8. Run the app
 
 ```bash
 npm run dev
@@ -144,6 +169,55 @@ npm run lint
 npm run build
 npm run start
 ```
+
+## 9. Deploy with the Vercel CLI
+
+Install the CLI, authenticate, and link this directory to a Vercel project:
+
+```bash
+npm install --global vercel
+vercel login
+vercel link
+```
+
+Add every variable from `env.example` to the appropriate Vercel environment. Vercel prompts for each value, which avoids placing secrets in shell history:
+
+```bash
+vercel env add NEXT_PUBLIC_FIREBASE_API_KEY production
+vercel env add NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN production
+vercel env add NEXT_PUBLIC_FIREBASE_PROJECT_ID production
+vercel env add NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET production
+vercel env add NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID production
+vercel env add NEXT_PUBLIC_FIREBASE_APP_ID production
+vercel env add FIREBASE_PROJECT_ID production --sensitive
+vercel env add FIREBASE_CLIENT_EMAIL production --sensitive
+vercel env add FIREBASE_PRIVATE_KEY production --sensitive
+vercel env add ROOT_EMAIL production --sensitive
+vercel env add VAULT_MASTER_KEY production --sensitive
+```
+
+If production uses the database migrated by this repository, enter the existing `VAULT_MASTER_KEY` from `.env.local`; do not generate a different key. Configure Preview with a separate Firebase project, database, and master key by repeating the commands with `preview` instead of `production`.
+
+Validate a build using Vercel's production environment without writing those variables to another local file:
+
+```bash
+vercel env run -e production -- npm run build
+```
+
+Create and test a Preview deployment:
+
+```bash
+vercel deploy
+vercel logs --level error
+```
+
+Add the final production hostname under **Firebase Authentication → Settings → Authorized domains**, then deploy to production:
+
+```bash
+vercel deploy --prod
+```
+
+After deployment, test sign-in, workspace switching, Vault decryption, member permissions, notifications, and a one-time share. Vercel documents the current commands in its [CLI deployment guide](https://vercel.com/docs/projects/deploy-from-cli) and [environment-variable reference](https://vercel.com/docs/cli/env).
 
 ## Authentication behavior
 
@@ -182,7 +256,7 @@ Set a separate, stable `VAULT_MASTER_KEY` in every deployed environment. The app
 
 Members with `canShare` permission can create a one-time public link for an individual Vault item. The browser re-encrypts a separate copy with a random share key; Firestore receives only ciphertext, a share-key fingerprint, a hashed bearer token, and a 24-hour expiration. The decryption key is carried in the URL fragment and is not sent with the page request. The recipient must explicitly reveal the item, and the API atomically marks the share consumed before returning its ciphertext. Link previews therefore do not consume shares. A recipient can still retain content after revealing it.
 
-Workspace owners can manage per-member access from the gear action on each named folder. Folder permissions include View, Edit, and Share, default to the member's workspace permissions, and can only restrict those workspace permissions. Owners always retain full access. Folder names and item contents remain encrypted; opaque folder IDs are stored as authorization metadata. Vault reads, edits, moves, and one-time shares revalidate folder access on the server. As with member removal, restricting a folder prevents future API access but cannot revoke plaintext or ciphertext a member retained while they previously had access.
+Workspace owners and members with the separate `canManageAccess` permission can manage per-member access from the gear action on each named folder. Folder permissions include View, Edit, and Share, default to the member's workspace permissions, and can only restrict those workspace permissions. Owners always retain full access. Folder names and item contents remain encrypted; opaque folder IDs are stored as authorization metadata. Vault reads, edits, moves, and one-time shares revalidate folder access on the server. As with member removal, restricting a folder prevents future API access but cannot revoke plaintext or ciphertext a member retained while they previously had access.
 
 Workspace owners can rename or delete a workspace from its settings page. Deletion archives the workspace and is rejected unless the owner has another active, accessible workspace to switch to. The system-managed Admin workspace cannot be renamed or deleted.
 
@@ -214,7 +288,7 @@ Select the Authentication and Firestore emulators. Never set `FIREBASE_AUTH_EMUL
 
 ## Deployment checklist
 
-- Add all `.env.local` values to the deployment environment.
+- Add all `.env.local` values to the deployment environment, including a stable `VAULT_MASTER_KEY` of at least 32 random bytes.
 - Keep Firebase Admin credentials server-only.
 - Set `ROOT_EMAIL` to the verified account that should receive the initial admin role.
 - Under **Firebase Authentication → Settings → Authorized domains**, add every production hostname that serves the login page.
