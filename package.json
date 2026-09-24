@@ -1,5 +1,5 @@
 {
-  "name": "nextjs-firebase-shadcn",
+  "name": "ez-share",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types tests/*.test.ts"
+    "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "vault:generate-key": "node scripts/generate-vault-master-key.mjs",
+    "vault:migrate-master-key": "node --env-file=.env.local scripts/migrate-vault-master-key.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

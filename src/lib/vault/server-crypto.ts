@@ -3,7 +3,11 @@ import 'server-only';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 
 function masterKey() {
-  const secret = process.env.VAULT_MASTER_KEY || process.env.FIREBASE_PRIVATE_KEY;
+  const configuredKey = process.env.VAULT_MASTER_KEY;
+  if (process.env.NODE_ENV === 'production' && !configuredKey) {
+    throw new Error('VAULT_MASTER_KEY must be configured in production.');
+  }
+  const secret = configuredKey || process.env.FIREBASE_PRIVATE_KEY;
   if (!secret) throw new Error('VAULT_MASTER_KEY is not configured.');
   return createHash('sha256').update(`ez-share:vault-master:v1:${secret}`).digest();
 }
