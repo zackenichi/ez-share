@@ -10,7 +10,9 @@ export type Team = {
   name: string;
   role: TeamMembership['role'];
   canEdit: boolean;
+  canDelete: boolean;
   canShare: boolean;
+  canInvite: boolean;
   canManageAccess: boolean;
 };
 
@@ -24,7 +26,7 @@ function membershipFromData(teamId: string, data: DocumentData): TeamMembership 
   const role = data.role;
   if (data.teamId !== teamId) return null;
   if (role !== 'owner' && role !== 'admin' && role !== 'member') return null;
-  return { teamId, role, status: data.status === 'active' ? 'active' : 'inactive', canEdit: role === 'owner' || data.canEdit === true, canShare: role === 'owner' || data.canShare === true, canManageAccess: role === 'owner' || data.canManageAccess === true };
+  return { teamId, role, status: data.status === 'active' ? 'active' : 'inactive', canEdit: role === 'owner' || data.canEdit === true, canDelete: role === 'owner' || data.canDelete === true, canShare: role === 'owner' || data.canShare === true, canInvite: role === 'owner' || data.canInvite === true, canManageAccess: role === 'owner' || data.canManageAccess === true };
 }
 
 function teamFromDocument(document: DocumentSnapshot, membership: TeamMembership): Team {
@@ -35,7 +37,9 @@ function teamFromDocument(document: DocumentSnapshot, membership: TeamMembership
       : 'Untitled workspace',
     role: membership.role,
     canEdit: membership.canEdit,
+    canDelete: membership.canDelete === true,
     canShare: membership.canShare,
+    canInvite: membership.canInvite === true,
     canManageAccess: membership.canManageAccess === true,
   };
 }

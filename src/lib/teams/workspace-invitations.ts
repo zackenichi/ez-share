@@ -4,11 +4,11 @@ import { FieldValue, type DocumentData } from 'firebase-admin/firestore';
 import { createInvitationToken, hashInvitationToken, newExpiration, normalizeEmail } from '@/lib/auth/invitations';
 import { getAdminDb } from '@/lib/firebase/admin';
 
-export type WorkspaceInvitation = { id: string; teamId: string; teamName: string; email: string; canEdit: boolean; canShare: boolean; canManageAccess: boolean; status: string; expiresAt: string; invitedByName: string };
+export type WorkspaceInvitation = { id: string; teamId: string; teamName: string; email: string; canEdit: boolean; canDelete: boolean; canShare: boolean; canInvite: boolean; canManageAccess: boolean; status: string; expiresAt: string; invitedByName: string };
 export const workspaceInvitationId = (teamId: string, email: string) => createHash('sha256').update(`${teamId}:${normalizeEmail(email)}`).digest('hex');
 export { createInvitationToken, hashInvitationToken, newExpiration, normalizeEmail };
 export function serializeWorkspaceInvitation(id: string, data: DocumentData): WorkspaceInvitation {
-  return { id, teamId: data.teamId, teamName: data.teamName || 'Workspace', email: data.email, canEdit: data.canEdit === true, canShare: data.canShare === true, canManageAccess: data.canManageAccess === true, status: data.status, expiresAt: data.expiresAt.toDate().toISOString(), invitedByName: data.invitedByName || 'A workspace owner' };
+  return { id, teamId: data.teamId, teamName: data.teamName || 'Workspace', email: data.email, canEdit: data.canEdit === true, canDelete: data.canDelete === true, canShare: data.canShare === true, canInvite: data.canInvite === true, canManageAccess: data.canManageAccess === true, status: data.status, expiresAt: data.expiresAt.toDate().toISOString(), invitedByName: data.invitedByName || 'A workspace owner' };
 }
 export async function getWorkspaceInvitationByToken(token: string) {
   const tokenHash = hashInvitationToken(token);

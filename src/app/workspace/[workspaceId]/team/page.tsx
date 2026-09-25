@@ -44,13 +44,13 @@ export default async function Page({ params, searchParams }: PageProps<'/workspa
   const profileById = new Map(profiles.map(profile => [profile.id, profile.data()]));
   const members: WorkspaceMember[] = membershipDocs.map(document => {
     const data = document.data(); const profile = profileById.get(data.userId);
-    return { uid: data.userId, name: profile?.displayName || profile?.email?.split('@')[0] || 'Member', email: profile?.email || '', role: data.role === 'owner' ? 'owner' : 'member', canEdit: data.canEdit === true, canShare: data.canShare === true, canManageAccess: data.canManageAccess === true };
+    return { uid: data.userId, name: profile?.displayName || profile?.email?.split('@')[0] || 'Member', email: profile?.email || '', role: data.role === 'owner' ? 'owner' : 'member', canEdit: data.canEdit === true, canDelete: data.canDelete === true, canShare: data.canShare === true, canInvite: data.canInvite === true, canManageAccess: data.canManageAccess === true };
   });
-  if (memberCount === 0) members.push({ uid: user.uid, name: user.name, email: user.email, role: workspace.role === 'owner' ? 'owner' : 'member', canEdit: workspace.canEdit, canShare: workspace.canShare, canManageAccess: workspace.canManageAccess });
+  if (memberCount === 0) members.push({ uid: user.uid, name: user.name, email: user.email, role: workspace.role === 'owner' ? 'owner' : 'member', canEdit: workspace.canEdit, canDelete: workspace.canDelete, canShare: workspace.canShare, canInvite: workspace.canInvite, canManageAccess: workspace.canManageAccess });
 
   const invitations = (invitationSnapshot?.docs ?? []).map(document => serializeWorkspaceInvitation(document.id, document.data()));
   const effectiveTotal = totalItems || members.length;
   const dataKey = [workspaceId, currentPage, ...members.map(member => member.uid), ...invitations.map(invitation => invitation.id)].join(':');
 
-  return <TeamInvitations key={dataKey} teamId={workspaceId} canShare={workspace.canShare} isOwner={workspace.role === 'owner'} members={members} initialInvitations={invitations} currentPage={currentPage} totalPages={Math.max(1, Math.ceil(effectiveTotal / PAGE_SIZE))} totalItems={effectiveTotal} />;
+  return <TeamInvitations key={dataKey} teamId={workspaceId} canInvite={workspace.canInvite} isOwner={workspace.role === 'owner'} members={members} initialInvitations={invitations} currentPage={currentPage} totalPages={Math.max(1, Math.ceil(effectiveTotal / PAGE_SIZE))} totalItems={effectiveTotal} />;
 }

@@ -17,7 +17,7 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/te
   const { id, uid } = await context.params;
   const actor = await authorize(request, id);
   if (!actor) return NextResponse.json({ error: 'Member management permission is required.' }, { status: 403 });
-  const parsed = z.object({ canEdit: z.boolean(), canShare: z.boolean(), canManageAccess: z.boolean() }).safeParse(await request.json().catch(() => null));
+  const parsed = z.object({ canEdit: z.boolean(), canDelete: z.boolean(), canShare: z.boolean(), canInvite: z.boolean(), canManageAccess: z.boolean() }).safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Valid permissions are required.' }, { status: 400 });
   const db = getAdminDb();
   const userRef = db.collection('users').doc(uid);
@@ -26,12 +26,12 @@ export async function PATCH(request: NextRequest, context: RouteContext<'/api/te
   if (membership.data()?.status !== 'active') return NextResponse.json({ error: 'Member not found.' }, { status: 404 });
   if (membership.data()?.role === 'owner') return NextResponse.json({ error: 'The workspace owner cannot be edited.' }, { status: 403 });
   const previous = membership.data()!;
-  if (previous.canEdit !== parsed.data.canEdit || previous.canShare !== parsed.data.canShare || previous.canManageAccess !== parsed.data.canManageAccess) {
+  if (previous.canEdit !== parsed.data.canEdit || previous.canDelete !== parsed.data.canDelete || previous.canShare !== parsed.data.canShare || previous.canInvite !== parsed.data.canInvite || previous.canManageAccess !== parsed.data.canManageAccess) {
     const batch = db.batch();
     batch.update(ref, { ...parsed.data, updatedAt: FieldValue.serverTimestamp() });
     batch.create(userRef.collection('notifications').doc(), {
       type: 'access_changed',
-      message: `Your workspace access changed: ${parsed.data.canEdit ? 'edit' : 'view only'} · ${parsed.data.canShare ? 'share' : 'cannot share'} · ${parsed.data.canManageAccess ? 'manage folder access' : 'cannot manage access'}.`,
+      message: `Your workspace access changed: ${parsed.data.canEdit ? 'edit' : 'view only'} · ${parsed.data.canDelete ? 'delete' : 'cannot delete'} · ${parsed.data.canShare ? 'share' : 'cannot share'} · ${parsed.data.canInvite ? 'invite' : 'cannot invite'} · ${parsed.data.canManageAccess ? 'manage folder access' : 'cannot manage access'}.`,
       href: `/workspace/${id}/vault`,
       teamId: id,
       unread: true,

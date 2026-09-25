@@ -21,11 +21,13 @@ export function NotificationCenter({ invitation, initialWorkspaceInvitations = [
   const [workspaceInvitations, setWorkspaceInvitations] = useState(initialWorkspaceInvitations);
   const [vaultRequests, setVaultRequests] = useState<VaultAccessRequest[]>([]);
   const [accessNotifications, setAccessNotifications] = useState<AccessNotification[]>([]);
+  const [readAccessIds, setReadAccessIds] = useState<Set<string>>(() => new Set());
   const knownIds = useRef(new Set(initialWorkspaceInvitations.map(item => item.id)));
   const knownVaultRequestIds = useRef(new Set<string>());
   const lastRefreshAt = useRef(0);
   const router = useRouter(); const progress = useGlobalProgress();
-  const count = workspaceInvitations.length + vaultRequests.length + accessNotifications.length + (invitation ? 1 : 0);
+  const unreadAccessCount = accessNotifications.filter(item => !readAccessIds.has(item.id)).length;
+  const count = workspaceInvitations.length + vaultRequests.length + unreadAccessCount + (invitation ? 1 : 0);
 
   const refreshInvitations = useCallback(async () => {
     if (Date.now() - lastRefreshAt.current < 30_000) return;
@@ -58,6 +60,19 @@ export function NotificationCenter({ invitation, initialWorkspaceInvitations = [
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [refreshInvitations]);
+
+  useEffect(() => {
+    if (!open) return;
+    const ids = accessNotifications.filter(item => !readAccessIds.has(item.id)).map(item => item.id);
+    if (!ids.length) return;
+    let cancelled = false;
+    async function markRead() {
+      const response = await fetch('/api/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+      if (!cancelled && response.ok) setReadAccessIds(current => new Set([...current, ...ids]));
+    }
+    void markRead();
+    return () => { cancelled = true; };
+  }, [accessNotifications, open, readAccessIds]);
 
   async function respondVaultRequest(item: VaultAccessRequest, action: 'approve' | 'decline') {
     setPending(`${item.id}-${action}`); progress.start();

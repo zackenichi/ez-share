@@ -3,7 +3,9 @@ export type TeamMembership = {
   role: 'owner' | 'admin' | 'member';
   status: 'active' | 'inactive';
   canEdit: boolean;
+  canDelete?: boolean;
   canShare: boolean;
+  canInvite?: boolean;
   canManageAccess?: boolean;
 };
 

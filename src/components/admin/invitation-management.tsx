@@ -58,12 +58,7 @@ export function InvitationManagement({ initialInvitations }: { initialInvitation
       form.reset();
       setInviteOpen(false);
       await refreshInvitations();
-      if (result.shareUrl) {
-        await copyLink(result.shareUrl);
-        toast.success('Invitation created. The link is ready to share.');
-      } else {
-        toast.success('Invitation created. It will appear when the user signs in.');
-      }
+      toast.success(result.shareUrl ? 'Invitation created.' : 'Invitation created. It will appear when the user signs in.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to create the invitation.');
     } finally { setPending(null); progress.done(); }
