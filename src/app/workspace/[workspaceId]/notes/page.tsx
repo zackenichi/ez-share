@@ -10,5 +10,5 @@ export default async function NotesPage({ params }: PageProps<'/workspace/[works
   if (!user) redirect('/');
   const workspace = user.teamContext.teams.find(team => team.id === workspaceId);
   if (!workspace) redirect('/dashboard');
-  return <VaultView workspaceId={workspaceId} canEdit={workspace.canEdit} canShare={workspace.canShare} canManageAccess={workspace.canManageAccess} isOwner={workspace.role === 'owner'} itemType="note" />;
+  return <VaultView workspaceId={workspaceId} canEdit={workspace.canEdit} canDelete={workspace.canDelete} canShare={workspace.canShare} canManageAccess={workspace.canManageAccess} isOwner={workspace.role === 'owner'} itemType="note" />;
 }

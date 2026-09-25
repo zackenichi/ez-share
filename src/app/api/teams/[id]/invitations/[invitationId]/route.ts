@@ -11,7 +11,7 @@ async function authorize(request: NextRequest, teamId: string) {
   const session = await getSessionUser(true);
   if (!session) return false;
   const membership = await getAdminDb().collection('users').doc(session.uid).collection('teamMemberships').doc(teamId).get();
-  return membership.data()?.status === 'active' && (membership.data()?.role === 'owner' || membership.data()?.canShare === true);
+  return membership.data()?.status === 'active' && (membership.data()?.role === 'owner' || membership.data()?.canInvite === true);
 }
 
 async function invitationForTeam(teamId: string, invitationId: string) {
@@ -22,7 +22,7 @@ async function invitationForTeam(teamId: string, invitationId: string) {
 
 export async function POST(request: NextRequest, context: RouteContext<'/api/teams/[id]/invitations/[invitationId]'>) {
   const { id, invitationId } = await context.params;
-  if (!await authorize(request, id)) return NextResponse.json({ error: 'Sharing permission is required.' }, { status: 403 });
+  if (!await authorize(request, id)) return NextResponse.json({ error: 'Invite permission is required.' }, { status: 403 });
   const db = getAdminDb(); const ref = db.collection('workspaceInvitations').doc(invitationId); const token = createInvitationToken();
   try {
     await db.runTransaction(async transaction => { const invitation = await transaction.get(ref); if (!invitation.exists || invitation.data()?.teamId !== id || invitation.data()?.status !== 'pending') throw new Error('NOT_FOUND'); transaction.update(ref, { tokenHash: hashInvitationToken(token), expiresAt: newExpiration(), updatedAt: FieldValue.serverTimestamp() }); });
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, context: RouteContext<'/api/tea
 export async function PATCH(request: NextRequest, context: RouteContext<'/api/teams/[id]/invitations/[invitationId]'>) {
   const { id, invitationId } = await context.params;
   if (!await authorize(request, id)) return NextResponse.json({ error: 'Member management permission is required.' }, { status: 403 });
-  const parsed = z.object({ canEdit: z.boolean(), canShare: z.boolean(), canManageAccess: z.boolean() }).safeParse(await request.json().catch(() => null));
+  const parsed = z.object({ canEdit: z.boolean(), canDelete: z.boolean(), canShare: z.boolean(), canInvite: z.boolean(), canManageAccess: z.boolean() }).safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Valid permissions are required.' }, { status: 400 });
   const result = await invitationForTeam(id, invitationId);
   if (!result || result.invitation.data()?.status !== 'pending') return NextResponse.json({ error: 'Pending invitation not found.' }, { status: 404 });

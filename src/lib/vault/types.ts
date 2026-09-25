@@ -3,5 +3,6 @@ export type EncryptedVaultItem = {
   ciphertext: string;
   iv: string;
   keyVersion: number;
+  createdAt: number;
   updatedAt: number;
 };

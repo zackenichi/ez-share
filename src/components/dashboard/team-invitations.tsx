@@ -35,7 +35,9 @@ export type WorkspaceMember = {
   email: string;
   role: 'owner' | 'member';
   canEdit: boolean;
+  canDelete: boolean;
   canShare: boolean;
+  canInvite: boolean;
   canManageAccess: boolean;
 };
 type EditablePerson = {
@@ -43,20 +45,22 @@ type EditablePerson = {
   id: string;
   label: string;
   canEdit: boolean;
+  canDelete: boolean;
   canShare: boolean;
+  canInvite: boolean;
   canManageAccess: boolean;
 };
 
-function permissions(canEdit: boolean, canShare: boolean, canManageAccess: boolean) {
+function permissions(canEdit: boolean, canDelete: boolean, canShare: boolean, canInvite: boolean, canManageAccess: boolean) {
   return (
-    [canEdit && 'Edit', canShare && 'Share', canManageAccess && 'Manage access'].filter(Boolean).join(' · ') ||
+    [canEdit && 'Edit', canDelete && 'Delete', canShare && 'Share', canInvite && 'Invite', canManageAccess && 'Folder access'].filter(Boolean).join(' · ') ||
     'View'
   );
 }
 
 export function TeamInvitations({
   teamId,
-  canShare,
+  canInvite,
   isOwner,
   members: initialMembers = [],
   initialInvitations = [],
@@ -65,7 +69,7 @@ export function TeamInvitations({
   totalItems,
 }: {
   teamId: string;
-  canShare: boolean;
+  canInvite: boolean;
   isOwner: boolean;
   members?: WorkspaceMember[];
   initialInvitations?: WorkspaceInvitation[];
@@ -99,7 +103,9 @@ export function TeamInvitations({
         body: JSON.stringify({
           email: data.get('email'),
           canEdit: data.get('canEdit') === 'on',
+          canDelete: data.get('canDelete') === 'on',
           canShare: data.get('canShare') === 'on',
+          canInvite: data.get('canInvite') === 'on',
           canManageAccess: data.get('canManageAccess') === 'on',
         }),
       });
@@ -109,7 +115,6 @@ export function TeamInvitations({
         invitation?: WorkspaceInvitation;
       };
       if (!response.ok) throw new Error(result.error);
-      if (result.shareUrl) await navigator.clipboard.writeText(result.shareUrl);
       if (result.invitation)
         setInvitations((current) => [
           result.invitation!,
@@ -117,7 +122,7 @@ export function TeamInvitations({
         ]);
       form.reset();
       setInviteOpen(false);
-      toast.success('Invitation created and link copied.');
+      toast.success('Invitation created.');
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to invite.');
@@ -133,7 +138,9 @@ export function TeamInvitations({
     const data = new FormData(event.currentTarget);
     const next = {
       canEdit: data.get('canEdit') === 'on',
+      canDelete: data.get('canDelete') === 'on',
       canShare: data.get('canShare') === 'on',
+      canInvite: data.get('canInvite') === 'on',
       canManageAccess: data.get('canManageAccess') === 'on',
     };
     const path =
@@ -244,7 +251,7 @@ export function TeamInvitations({
   }
 
   function actions(target: EditablePerson) {
-    if (!canShare || (target.type === 'member' && !isOwner)) return null;
+    if (!canInvite || (target.type === 'member' && !isOwner)) return null;
     return (
       <DropdownMenu>
         <DropdownMenuTrigger
@@ -292,7 +299,7 @@ export function TeamInvitations({
             People with access to this workspace.
           </p>
         </div>
-        {canShare && (
+        {canInvite && (
           <AlertDialog open={inviteOpen} onOpenChange={setInviteOpen}>
             <AlertDialogTrigger render={<Button />}>
               <MailPlus />
@@ -319,8 +326,16 @@ export function TeamInvitations({
                     Can edit Vault content
                   </label>
                   <label className="flex items-center gap-3 text-sm">
+                    <Checkbox name="canDelete" disabled={pending} />
+                    Can delete Vault content
+                  </label>
+                  <label className="flex items-center gap-3 text-sm">
                     <Checkbox name="canShare" disabled={pending} />
-                    Can share and invite members
+                    Can share Vault items
+                  </label>
+                  <label className="flex items-center gap-3 text-sm">
+                    <Checkbox name="canInvite" disabled={pending} />
+                    Can invite members
                   </label>
                   <label className="flex items-center gap-3 text-sm">
                     <Checkbox name="canManageAccess" disabled={pending} />
@@ -371,7 +386,7 @@ export function TeamInvitations({
                 <td className="px-4 py-3 text-muted-foreground">
                   {member.role === 'owner'
                     ? 'Full access'
-                    : permissions(member.canEdit, member.canShare, member.canManageAccess)}
+                    : permissions(member.canEdit, member.canDelete, member.canShare, member.canInvite, member.canManageAccess)}
                 </td>
                 <td className="px-4 py-2">
                   {member.role !== 'owner' &&
@@ -380,7 +395,9 @@ export function TeamInvitations({
                       id: member.uid,
                       label: member.name,
                       canEdit: member.canEdit,
+                      canDelete: member.canDelete,
                       canShare: member.canShare,
+                      canInvite: member.canInvite,
                       canManageAccess: member.canManageAccess,
                     })}
                 </td>
@@ -400,7 +417,7 @@ export function TeamInvitations({
                     <Badge variant="outline">member</Badge>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {permissions(invite.canEdit, invite.canShare, invite.canManageAccess)}
+                    {permissions(invite.canEdit, invite.canDelete, invite.canShare, invite.canInvite, invite.canManageAccess)}
                   </td>
                   <td className="px-4 py-2">
                     {actions({
@@ -408,7 +425,9 @@ export function TeamInvitations({
                       id: invite.id,
                       label: invite.email,
                       canEdit: invite.canEdit,
+                      canDelete: invite.canDelete,
                       canShare: invite.canShare,
+                      canInvite: invite.canInvite,
                       canManageAccess: invite.canManageAccess,
                     })}
                   </td>
@@ -479,11 +498,27 @@ export function TeamInvitations({
                 </label>
                 <label className="flex items-center gap-3 text-sm">
                   <Checkbox
+                    name="canDelete"
+                    defaultChecked={editTarget.canDelete}
+                    disabled={pending}
+                  />
+                  Can delete
+                </label>
+                <label className="flex items-center gap-3 text-sm">
+                  <Checkbox
                     name="canShare"
                     defaultChecked={editTarget.canShare}
                     disabled={pending}
                   />
                   Can share
+                </label>
+                <label className="flex items-center gap-3 text-sm">
+                  <Checkbox
+                    name="canInvite"
+                    defaultChecked={editTarget.canInvite}
+                    disabled={pending}
+                  />
+                  Can invite members
                 </label>
                 <label className="flex items-center gap-3 text-sm">
                   <Checkbox

@@ -23,6 +23,7 @@ const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('putEnvelope'), senderDeviceId: z.string().regex(DEVICE_ID), deviceId: z.string().regex(DEVICE_ID), recipientUid: z.string().min(1).max(128), wrappedKey: z.string().min(100).max(2000), initialize: z.boolean().optional() }),
   z.object({ action: z.literal('createItem'), itemId: z.string().regex(ITEM_ID), ciphertext: z.string().min(20).max(500_000), iv: z.string().min(16).max(64), keyVersion: z.literal(1), ...folderMetadata }),
   z.object({ action: z.literal('updateItem'), itemId: z.string().regex(ITEM_ID), ciphertext: z.string().min(20).max(500_000), iv: z.string().min(16).max(64), keyVersion: z.literal(1), ...folderMetadata }),
+  z.object({ action: z.literal('deleteItem'), itemId: z.string().regex(ITEM_ID) }),
   z.object({ action: z.literal('migrateMetadata'), items: z.array(z.object({ itemId: z.string().regex(ITEM_ID), ...folderMetadata })).max(200) }),
 ]);
 
@@ -32,7 +33,7 @@ async function contextFor(uid: string, teamId: string) {
   const data = membership.data();
   if (data?.status !== 'active') return null;
   const role = data.role === 'owner' ? 'owner' as const : 'member' as const;
-  return { role, canEdit: role === 'owner' || data.canEdit === true, canShare: role === 'owner' || data.canShare === true, canManageAccess: role === 'owner' || data.canManageAccess === true };
+  return { role, canEdit: role === 'owner' || data.canEdit === true, canDelete: role === 'owner' || data.canDelete === true, canShare: role === 'owner' || data.canShare === true, canManageAccess: role === 'owner' || data.canManageAccess === true };
 }
 
 export async function GET(request: NextRequest, route: RouteContext<'/api/teams/[id]/vault'>) {
@@ -64,14 +65,14 @@ export async function GET(request: NextRequest, route: RouteContext<'/api/teams/
   if (teamData?.vaultKeyCiphertext && teamData?.vaultKeyIv) workspaceKey = revealWorkspaceKey(teamData.vaultKeyCiphertext, teamData.vaultKeyIv);
   const permissionDocuments = folderPermissions?.docs ?? [];
   const permissionByFolder = new Map(permissionDocuments.map(document => [document.id, document.data().members?.[session.uid] as { canView?: boolean } | undefined]));
-  const folderAccess = Object.fromEntries(permissionDocuments.map(document => { const saved = document.data().members?.[session.uid]; return [document.id, { canView: saved?.canView !== false, canEdit: access.canEdit && saved?.canView !== false && saved?.canEdit !== false, canShare: access.canShare && saved?.canView !== false && saved?.canShare !== false }]; }));
+  const folderAccess = Object.fromEntries(permissionDocuments.map(document => { const saved = document.data().members?.[session.uid]; return [document.id, { canView: saved?.canView !== false, canEdit: access.canEdit && saved?.canView !== false && saved?.canEdit !== false, canDelete: access.canDelete && saved?.canView !== false && saved?.canDelete !== false, canShare: access.canShare && saved?.canView !== false && saved?.canShare !== false }]; }));
   const visibleItems = items.docs.filter(document => {
     if (access.role === 'owner') return true;
     const data = document.data(); const folderId = data.itemKind === 'folder' ? document.id : data.folderId;
     return typeof folderId !== 'string' || folderId === 'none' || permissionByFolder.get(folderId)?.canView !== false;
   });
   return NextResponse.json(
-    { access, folderAccess, revision: teamData?.vaultRevision || 0, keyInitialized: teamData?.vaultKeyVersion === 1, workspaceKey, envelope: envelope.exists ? envelope.data()?.wrappedKey ?? null : null, items: visibleItems.map(document => ({ id: document.id, ciphertext: document.data().ciphertext, iv: document.data().iv, keyVersion: document.data().keyVersion, updatedAt: document.data().updatedAt?.toMillis?.() ?? 0 })), recipients },
+    { access, folderAccess, revision: teamData?.vaultRevision || 0, keyInitialized: teamData?.vaultKeyVersion === 1, workspaceKey, envelope: envelope.exists ? envelope.data()?.wrappedKey ?? null : null, items: visibleItems.map(document => ({ id: document.id, ciphertext: document.data().ciphertext, iv: document.data().iv, keyVersion: document.data().keyVersion, createdAt: document.data().createdAt?.toMillis?.() ?? document.data().updatedAt?.toMillis?.() ?? 0, updatedAt: document.data().updatedAt?.toMillis?.() ?? 0 })), recipients },
     { headers: { 'Cache-Control': 'private, no-store, max-age=0, must-revalidate' } },
   );
 }
@@ -139,6 +140,22 @@ export async function POST(request: NextRequest, route: RouteContext<'/api/teams
     if (access.role !== 'owner') return NextResponse.json({ error: 'Only the workspace owner can migrate folder metadata.' }, { status: 403 });
     const batch = db.batch();
     body.items.forEach(item => batch.set(teamRef.collection('vaultItems').doc(item.itemId), { itemKind: item.itemKind, folderId: item.itemKind === 'folder' ? item.itemId : item.folderId }, { merge: true }));
+    await batch.commit();
+    return NextResponse.json({ ok: true });
+  }
+  if (body.action === 'deleteItem') {
+    if (!access.canDelete) return NextResponse.json({ error: 'Delete permission is required.' }, { status: 403 });
+    const itemRef = teamRef.collection('vaultItems').doc(body.itemId);
+    const item = await itemRef.get();
+    if (!item.exists) return NextResponse.json({ error: 'Vault item not found.' }, { status: 404 });
+    const folderId = item.data()?.folderId;
+    if (access.role !== 'owner' && typeof folderId === 'string' && folderId !== 'none') {
+      const settings = (await teamRef.collection('folderPermissions').doc(folderId).get()).data()?.members?.[session.uid];
+      if (settings?.canView === false || settings?.canDelete === false) return NextResponse.json({ error: 'Delete permission is required for this folder.' }, { status: 403 });
+    }
+    const batch = db.batch();
+    batch.delete(itemRef);
+    batch.update(teamRef, { vaultRevision: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
     await batch.commit();
     return NextResponse.json({ ok: true });
   }
